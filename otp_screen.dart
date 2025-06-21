@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,25 +23,23 @@ class OTPScreen extends ConsumerStatefulWidget {
 }
 
 class _OTPScreenState extends ConsumerState<OTPScreen> {
-  // latelization the Provider instance
-  late ManageOTP manageOtp;
+  late final OTPManager otp;
 
   @override
   void initState() {
-    manageOtp = ref.read(optProvider);
-
-    manageOtp.initializeOtpControllers;
     super.initState();
   }
 
   @override
   void dispose() {
-    manageOtp.disposeOtpControllers;
+    otp.disposeControllerList;
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final ControllersList otpControllers = ref.watch(otpManagerProvider);
+
     return Scaffold(
       backgroundColor: ColorsSwitcher.background2,
       body: Column(
@@ -80,12 +79,9 @@ class _OTPScreenState extends ConsumerState<OTPScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: <Widget>[
-                        OtpField(controller: manageOtp.otpController1!),
-                        OtpField(controller: manageOtp.otpController2!),
-                        OtpField(controller: manageOtp.otpController3!),
-                        OtpField(controller: manageOtp.otpController4!),
-                        OtpField(controller: manageOtp.otpController5!),
-                        OtpField(controller: manageOtp.otpController6!),
+                        for (int i = 0; i < otpControllers.length; i++) ...{
+                          OtpField(controller: otpControllers[i]),
+                        }
                       ],
                     ),
                   ),
@@ -307,58 +303,60 @@ class _ResendOTPState extends State<ResendOTP> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(builder: (context, ref, _) {
-      return Column(
-        children: <Widget>[
-          gapH(0.02),
-          TextButton(
-            onPressed: () {
-              if (!isButtonActive) {
-                return;
-              }
+    return Consumer(
+      builder: (context, ref, _) {
+        return Column(
+          children: <Widget>[
+            gapH(0.02),
+            TextButton(
+              onPressed: () {
+                if (!isButtonActive) {
+                  return;
+                }
 
-              startCounter;
-            },
-            style: const ButtonStyle(
-              overlayColor: WidgetStatePropertyAll(
-                Colors.transparent,
+                startCounter;
+              },
+              style: const ButtonStyle(
+                overlayColor: WidgetStatePropertyAll(
+                  Colors.transparent,
+                ),
               ),
-            ),
-            child: Text(
-              "Resend it",
-              style: TextStyle(
-                decoration: TextDecoration.underline,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: isButtonActive ? Colors.blue : Colors.grey,
-              ),
-            ),
-          ),
-          if (showCounter) ...{
-            SizedBox(
-              height: context.screenHeight * .05,
               child: Text(
-                formattedCounter,
-                style: const TextStyle(
-                  fontSize: 20,
+                "Resend it",
+                style: TextStyle(
+                  decoration: TextDecoration.underline,
+                  fontSize: 17,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey,
+                  color: isButtonActive ? Colors.blue : Colors.grey,
                 ),
               ),
             ),
-          } else ...{
-            SizedBox(
-              height: context.screenHeight * .05,
-            )
-          },
-          SubmitButton(
-            onSubmit: () {
-              ref.read(optProvider).doSomethingWithTheCode;
+            if (showCounter) ...{
+              SizedBox(
+                height: context.screenHeight * .05,
+                child: Text(
+                  formattedCounter,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            } else ...{
+              SizedBox(
+                height: context.screenHeight * .05,
+              )
             },
-          ),
-        ],
-      );
-    });
+            SubmitButton(
+              onSubmit: () {
+                ref.read(otpManagerProvider.notifier).doSomethingWithTheCode;
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -442,83 +440,76 @@ const String sendOTP =
 
 const String buttonActivationLog = "Button is Active right now !!";
 
-// Manage OTP
+const String internetError = "Please check your internet connection";
 
-class ManageOTP {
-  /// Declearing the controllers
-  /// One Controller for each Field
-  TextEditingController? otpController1;
-  TextEditingController? otpController2;
-  TextEditingController? otpController3;
-  TextEditingController? otpController4;
-  TextEditingController? otpController5;
-  TextEditingController? otpController6;
+const String disposeLog = " Controllers Has been disposed";
+const String initLog = " Controllers Has been initialized";
 
-  /// Initialzing the controllers and invoke the method in initState()
+// Improved Verssion of the OTP Code
 
-  void get initializeOtpControllers {
-    otpController1 = TextEditingController();
-    otpController2 = TextEditingController();
-    otpController3 = TextEditingController();
-    otpController4 = TextEditingController();
-    otpController5 = TextEditingController();
-    otpController6 = TextEditingController();
+typedef ControllersList = List<TextEditingController>;
+
+class OTPManager extends Notifier<ControllersList> {
+  static const int _numDigits = 6;
+
+  // Initialize Controlles in build
+  @override
+  ControllersList build() {
+    final ControllersList controllers = <TextEditingController>[
+      for (int i = 0; i < _numDigits; i++) ...{
+        TextEditingController(),
+      }
+    ];
+    log(initLog);
+    return controllers;
   }
 
-  /// Dispose the controllers and invoke the method in dispose()
+  // Dispose controllers after use
+  void get disposeControllerList {
+    for (int i = 0; i < state.length; i++) {
+      state[i].dispose();
+    }
 
-  void get disposeOtpControllers {
-    otpController1!.dispose();
-    otpController2!.dispose();
-    otpController3!.dispose();
-    otpController4!.dispose();
-    otpController5!.dispose();
-    otpController6!.dispose();
+    log(disposeLog);
   }
 
-  // Check that each controller has its value without white spaces
+  // Check that each controller has value
+  bool get _checkIsFullCode {
+    for (int c = 0; c < state.length; c++) {
+      final bool emptyController = state[c].text.trim().isEmpty;
 
-  bool get _hasFullValue {
-    final bool hasFullCode = otpController1!.text.trim().isNotEmpty &&
-        otpController2!.text.trim().isNotEmpty &&
-        otpController3!.text.trim().isNotEmpty &&
-        otpController4!.text.trim().isNotEmpty &&
-        otpController5!.text.trim().isNotEmpty &&
-        otpController6!.text.trim().isNotEmpty;
+      if (emptyController) {
+        return false;
+      }
+    }
 
-    return hasFullCode;
+    return true;
   }
 
-  // Get the full code from the controllers
+  // Catch the full code after user submit
+  String get _fullCode {
+    String fullCode = "";
 
-  String get _fullOtpCode {
-    final String digit1 = otpController1!.text.trim();
-    final String digit2 = otpController2!.text.trim();
-    final String digit3 = otpController3!.text.trim();
-    final String digit4 = otpController4!.text.trim();
-    final String digit5 = otpController5!.text.trim();
-    final String digit6 = otpController6!.text.trim();
+    for (int t = 0; t < state.length; t++) {
+      final String otp = state[t].text.trim();
+      fullCode = "$fullCode$otp";
+    }
 
-    final String fullCode = "$digit1$digit2$digit3$digit4$digit5$digit6";
+    log("Code : $fullCode");
 
     return fullCode;
   }
 
-  // Clearing the controllers after user submit the code
-
-  void get clearFields {
-    otpController1!.clear();
-    otpController2!.clear();
-    otpController3!.clear();
-    otpController4!.clear();
-    otpController5!.clear();
-    otpController6!.clear();
+  // Clean the controllers in case I will not pop the screen
+  void get clearControllers {
+    for (int i = 0; i < state.length; i++) {
+      state[i].clear();
+    }
   }
 
-  // Do something with the code 
-
+  // Do something with the code after catch it like supabase verifing
   void get doSomethingWithTheCode {
-    if (!_hasFullValue) {
+    if (!_checkIsFullCode) {
       showToastification(
         description: insertFullCode,
         type: ToastificationType.error,
@@ -526,18 +517,31 @@ class ManageOTP {
       return;
     }
 
-    log("The insertted code : $_fullOtpCode");
+    try {
+      log("The insertted code : $_fullCode");
 
-    clearFields;
+      showToastification(
+        title: "Code: $_fullCode",
+        description: goodCode,
+        type: ToastificationType.success,
+      );
 
-    showToastification(
-      title: "Code: $_fullOtpCode",
-      description: goodCode,
-      type: ToastificationType.success,
-    );
+      clearControllers;
+    } on SocketException {
+      showToastification(
+        description: internetError,
+        type: ToastificationType.error,
+      );
+    } catch (error) {
+      log("Error while verification: $error");
+    } finally {
+      clearControllers;
+    }
   }
 }
 
-// Create the provider to use it in the Presentaition Layer
+// Create a provider to access the notifer class
 
-final optProvider = Provider<ManageOTP>((ref) => ManageOTP());
+final otpManagerProvider = NotifierProvider<OTPManager, ControllersList>(
+  OTPManager.new,
+);
